@@ -1,0 +1,68 @@
+#include <Arduino.h>
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_ILI9341.h>
+#include <XPT2046_Touchscreen.h>
+
+// EKRAN Pinleri
+#define TFT_CS    5
+#define TFT_DC    2
+#define TFT_RST   4
+
+// DOKUNMATİK Pinleri
+#define T_CS      21
+#define T_IRQ     22 
+
+// Ekran ve Dokunmatik nesneleri
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
+XPT2046_Touchscreen ts(T_CS, T_IRQ);
+
+//====================================================================================
+// DİKKAT: BİR SONRAKİ ADIMDA BU SAYILARI KENDİ DEĞERLERİNLE GÜNCELLEYECEKSİN!
+//====================================================================================
+#define TS_MINX 300
+#define TS_MAXX 3800
+#define TS_MINY 450
+#define TS_MAXY 3700
+//====================================================================================
+
+void setup() {
+  Serial.begin(115200);
+  tft.begin();
+  
+  if (!ts.begin()) {
+    Serial.println("Dokunmatik kontrolcusu bulunamadi!");
+    tft.fillScreen(ILI9341_RED);
+    while (1);
+  }
+  Serial.println("Dokunmatik yuzey baslatildi.");
+  
+  tft.setRotation(0);
+  tft.fillScreen(ILI9341_BLACK);
+  tft.setTextSize(2);
+  tft.setTextColor(ILI9341_WHITE);
+  tft.setCursor(10,10);
+  tft.println("Kalibrasyon Testi");
+  tft.setTextSize(1);
+  tft.println("\n(Seri Monitorden min/max degerlerini al)");
+}
+
+void loop() {
+  if (ts.touched()) {
+    TS_Point p = ts.getPoint();
+    
+    // Ham verileri Seri Monitör'e yazdır
+    Serial.print("Ham X = "); Serial.print(p.x);
+    Serial.print("\tHam Y = "); Serial.print(p.y);
+    Serial.println();
+
+    // === SON AYAR: SADECE BİR EKSEN TERS ===
+    // Dokunmatik Y'yi -> Ekran X'ine TERS olarak haritala (SAĞ-SOL DÜZELTİLDİ)
+    int screenX = map(p.y, TS_MAXY, TS_MINY, 0, tft.width());
+    // Dokunmatik X'i -> Ekran Y'sine DÜZ olarak haritala (YUKARI-AŞAĞI DÜZELTİLDİ)
+    int screenY = map(p.x, TS_MINX, TS_MAXX, 0, tft.height());
+
+    // Ekrana yeşil noktacığı çiz
+    tft.fillCircle(screenX, screenY, 5, ILI9341_GREEN);
+  }
+}

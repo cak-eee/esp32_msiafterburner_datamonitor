@@ -1,0 +1,76 @@
+#include <Arduino.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_ILI9341.h>
+
+// EKRAN Pinleri
+#define TFT_CS    5
+#define TFT_DC    2
+#define TFT_RST   4
+
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
+
+// Renkleri tanımlayalım
+#define COLOR_GPU   ILI9341_GREEN
+#define COLOR_CPU   ILI9341_CYAN
+#define COLOR_RAM   ILI9341_ORANGE
+#define COLOR_FPS   ILI9341_RED // <<-- İsteğin üzerine KIRMIZI olarak değiştirildi
+
+// Her bir kutuyu çizen yardımcı fonksiyon
+void drawBox(int number, int x, int y, int w, int h, uint16_t color, const char* unit) {
+    tft.drawRect(x, y, w, h, color); // Kutunun dış çerçevesi
+
+    tft.setTextSize(1);
+    tft.setTextColor(color);
+    tft.setCursor(x + 3, y + 3);
+    tft.print(number); // Sol üste kutu numarası
+
+    // Sağ alta birimi yaz
+    tft.setCursor(x + w - (strlen(unit) * 6) - 4, y + h - 10);
+    tft.print(unit);
+}
+
+void setup() {
+    tft.begin();
+    tft.setRotation(0);
+    tft.fillScreen(ILI9341_BLACK);
+
+    // --- YENİ Koordinat ve Boyut Ayarları (Tüm ekranı kullanacak şekilde) ---
+    int x1 = 10,  x2 = 65, x3 = 125, x4 = 185;
+    int w_label = 50, w_val = 50;
+    int h_row = 40; // <<-- Kutu yüksekliği artırıldı
+    int y_pad = 22; // <<-- Dikey boşluk artırıldı
+
+    // --- SATIR 1 & 2: GPU Bölümü ---
+    int y1 = 15;
+    drawBox(1, x1, y1, w_label, h_row, COLOR_GPU, "GPU");
+    drawBox(2, x2, y1, w_val, h_row, COLOR_GPU, " C");
+    drawBox(3, x3, y1, w_val, h_row, COLOR_GPU, " %");
+    drawBox(4, x4, y1, w_val, h_row, COLOR_GPU, "MHz");
+
+    int y2 = y1 + h_row + y_pad;
+    drawBox(5, x2, y2, w_val, h_row, COLOR_GPU, " W");
+    drawBox(6, x3, y2, w_val, h_row, COLOR_GPU, " %");
+    drawBox(7, x4, y2, w_val, h_row, COLOR_GPU, "RPM");
+
+    // --- SATIR 3: CPU Bölümü ---
+    int y3 = y2 + h_row + y_pad;
+    drawBox(8, x1, y3, w_label, h_row, COLOR_CPU, "CPU");
+    drawBox(9, x2, y3, w_val, h_row, COLOR_CPU, " C");
+    drawBox(10, x3, y3, w_val, h_row, COLOR_CPU, " %");
+    drawBox(11, x4, y3, w_val, h_row, COLOR_CPU, " W"); // <<-- MHz yerine WATT olarak değiştirildi
+
+    // --- SATIR 4: RAM Bölümü ---
+    int y4 = y3 + h_row + y_pad;
+    drawBox(12, x1, y4, w_label, h_row, COLOR_RAM, "RAM");
+    drawBox(13, x2, y4, 160, h_row, COLOR_RAM, "MB"); // RAM için daha geniş kutu
+
+    // --- SATIR 5: FPS Bölümü ---
+    int y5 = y4 + h_row + y_pad;
+    drawBox(14, x1, y5, w_label, h_row, COLOR_FPS, "D3D9"); // <<-- D3D9 etiketi geri eklendi
+    drawBox(15, x2, y5, w_val, h_row, COLOR_FPS, "FPS");
+    drawBox(16, x3, y5, w_val, h_row, COLOR_FPS, "ms");
+}
+
+void loop() {
+  // Bu kodda loop boş. Sadece statik iskeleti görmek istiyoruz.
+}

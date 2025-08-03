@@ -1,0 +1,42 @@
+#include <Arduino.h>
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_ILI9341.h>
+
+// Pin Tanımlamaları
+#define TFT_CS    5
+#define TFT_DC    2
+#define TFT_RST   4
+
+// Adafruit Ekran nesnesini oluşturma (DÜZELTİLMİŞ SATIR)
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
+
+void setup() {
+  tft.begin();
+}
+
+void loop() {
+  // 0, 1, 2, 3 tüm rotasyonları sırayla test edelim
+  for (int r = 0; r < 4; r++) {
+    tft.setRotation(r);
+    tft.fillScreen(ILI9341_BLACK);
+    
+    // Ekrana o anki rotasyon numarasını büyük bir şekilde yazdıralım
+    tft.setCursor(0, 0); // İmleci en başa al
+    tft.setTextColor(ILI9341_CYAN);
+    tft.setTextSize(10); // Yazı boyutunu devasa yap
+    
+    // Metni ortalamak için pozisyonu hesaplayalım
+    int16_t x1, y1;
+    uint16_t w, h;
+    String rotasyon_yazisi = String(r);
+    tft.getTextBounds(rotasyon_yazisi, 0, 0, &x1, &y1, &w, &h);
+    
+    // İmleci hesaplanan konuma getir ve metni yazdır
+    tft.setCursor((tft.width() - w) / 2, (tft.height() - h) / 2);
+    tft.println(rotasyon_yazisi);
+
+    // Bu rotasyonda 4 saniye bekle
+    delay(4000);
+  }
+}

@@ -1,0 +1,179 @@
+#include <Arduino.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_ILI9341.h>
+#include <ArduinoJson.h>
+
+// EKRAN Pinleri
+#define TFT_CS    5
+#define TFT_DC    2
+#define TFT_RST   4
+
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
+StaticJsonDocument<512> doc;
+
+// Renkleri tanımlayalım
+#define COLOR_GPU   ILI9341_GREEN
+#define COLOR_CPU   ILI9341_CYAN
+#define COLOR_RAM   ILI9341_ORANGE
+#define COLOR_FPS   ILI9341_RED
+
+// Tüm sensör değerlerini saklamak için
+struct SensorValues {
+    char GPUT[8] = "--", GPUU[8] = "--", GPUC[8] = "--", GPUP[8] = "--", FAN[8] = "--", FANS[8] = "--";
+    char CPUT[8] = "--", CPUU[8] = "--", CPUC[8] = "--", CPUP[8] = "--";
+    char RAM[8] = "--";
+    char FPS[8] = "--", FT[8] = "--";
+};
+SensorValues current, previous;
+
+// Değerleri kutunun içine çizen yardımcı fonksiyon
+void updateField(int x, int y, int w, int h, const char* newValue, const char* oldValue, uint16_t color) {
+    if (strcmp(newValue, oldValue) != 0) {
+        tft.setTextSize(2);
+        tft.fillRect(x + 1, y + 1, w - 2, h - 18, ILI9341_BLACK);
+        tft.setCursor(x + 5, y + 5);
+        tft.setTextColor(color);
+        tft.print(newValue);
+    }
+}
+
+// Arayüzün sabit iskeletini çizen fonksiyon
+void drawLayout() {
+    tft.fillScreen(ILI9341_BLACK);
+
+    // --- Koordinat ve Boyut Ayarları ---
+    // YENİ: 3 Değer kutusu sığacak şekilde X koordinatları ve genişlikler
+    int x1 = 5,  x2 = 65, x3 = 125, x4 = 185;
+    int w_label = 55, w_val = 50; 
+    int h_row = 45;
+    int y_pad = 15;
+
+    int y1 = 15;
+    int y2 = y1 + h_row + y_pad;
+    int y3 = y2 + h_row + y_pad;
+    int y4 = y3 + h_row + y_pad;
+    int y5 = y4 + h_row + y_pad;
+    
+    int unit_w = 25, unit_h = 15;
+
+    // --- BÖLÜM ETİKETLERİ ---
+    tft.drawRect(x1, y1, w_label, h_row, COLOR_GPU);
+    tft.setTextSize(2);
+    tft.setCursor(x1 + 7, y1 + 15); tft.setTextColor(COLOR_GPU); tft.print("GPU");
+
+    // --- DEĞER KUTULARI VE BİRİMLERİ ---
+    // GPU - Satır 1 (3 Kutu)
+    tft.drawRect(x2, y1, w_val, h_row, COLOR_GPU); // Temp
+    tft.drawRect(x2 + w_val - unit_w, y1 + h_row - unit_h, unit_w, unit_h, COLOR_GPU);
+    tft.setTextSize(1); tft.setCursor(x2 + w_val - unit_w + 5, y1 + h_row - unit_h + 4); tft.print(" C");
+
+    tft.drawRect(x3, y1, w_val, h_row, COLOR_GPU); // Usage
+    tft.drawRect(x3 + w_val - unit_w, y1 + h_row - unit_h, unit_w, unit_h, COLOR_GPU);
+    tft.setCursor(x3 + w_val - unit_w + 5, y1 + h_row - unit_h + 4); tft.print(" %");
+
+    tft.drawRect(x4, y1, w_val, h_row, COLOR_GPU); // Clock (YENİ EKLENDİ)
+    tft.drawRect(x4 + w_val - 30, y1 + h_row - unit_h, 30, unit_h, COLOR_GPU);
+    tft.setCursor(x4 + w_val - 30 + 3, y1 + h_row - unit_h + 4); tft.print("MHz");
+
+    // GPU - Satır 2 (3 Kutu)
+    tft.drawRect(x2, y2, w_val, h_row, COLOR_GPU); // Power
+    tft.drawRect(x2 + w_val - unit_w, y2 + h_row - unit_h, unit_w, unit_h, COLOR_GPU);
+    tft.setCursor(x2 + w_val - unit_w + 5, y2 + h_row - unit_h + 4); tft.print(" W");
+
+    tft.drawRect(x3, y2, w_val, h_row, COLOR_GPU); // Fan % (YENİ EKLENDİ)
+    tft.drawRect(x3 + w_val - unit_w, y2 + h_row - unit_h, unit_w, unit_h, COLOR_GPU);
+    tft.setCursor(x3 + w_val - unit_w + 5, y2 + h_row - unit_h + 4); tft.print(" %");
+
+    tft.drawRect(x4, y2, w_val, h_row, COLOR_GPU); // Fan RPM
+    tft.drawRect(x4 + w_val - unit_w, y2 + h_row - unit_h, unit_w, unit_h, COLOR_GPU);
+    tft.setCursor(x4 + w_val - unit_w + 2, y2 + h_row - unit_h + 4); tft.print("RPM");
+
+    // CPU (3 Kutu)
+    tft.drawRect(x1, y3, w_label, h_row, COLOR_CPU);
+    tft.setTextSize(2); tft.setCursor(x1 + 7, y3 + 15); tft.setTextColor(COLOR_CPU); tft.print("CPU");
+    
+    tft.drawRect(x2, y3, w_val, h_row, COLOR_CPU); // Temp
+    tft.drawRect(x2 + w_val - unit_w, y3 + h_row - unit_h, unit_w, unit_h, COLOR_CPU);
+    tft.setTextSize(1); tft.setCursor(x2 + w_val - unit_w + 5, y3 + h_row - unit_h + 4); tft.print(" C");
+
+    tft.drawRect(x3, y3, w_val, h_row, COLOR_CPU); // Usage
+    tft.drawRect(x3 + w_val - unit_w, y3 + h_row - unit_h, unit_w, unit_h, COLOR_CPU);
+    tft.setCursor(x3 + w_val - unit_w + 5, y3 + h_row - unit_h + 4); tft.print(" %");
+    
+    tft.drawRect(x4, y3, w_val, h_row, COLOR_CPU); // Power (YENİ EKLENDİ)
+    tft.drawRect(x4 + w_val - unit_w, y3 + h_row - unit_h, unit_w, unit_h, COLOR_CPU);
+    tft.setCursor(x4 + w_val - unit_w + 5, y3 + h_row - unit_h + 4); tft.print(" W");
+
+
+    // --- ALT YARI (DEĞİŞİKLİK YOK) ---
+    // RAM
+    tft.drawRect(x1, y4, w_label, h_row, COLOR_RAM);
+    tft.setTextSize(2); tft.setCursor(x1 + 7, y4 + 15); tft.setTextColor(COLOR_RAM); tft.print("RAM");
+    tft.drawRect(x2, y4, 130, h_row, COLOR_RAM);
+    tft.drawRect(x2 + 130 - 30, y4 + h_row - unit_h, 30, unit_h, COLOR_RAM);
+    tft.setTextSize(1); tft.setCursor(x2 + 130 - 30 + 5, y4 + h_row - unit_h + 4); tft.print("MB");
+    // FPS
+    tft.drawRect(x1, y5, w_label, h_row, COLOR_FPS);
+    tft.setTextSize(2); tft.setCursor(x1 + 7, y5 + 15); tft.setTextColor(COLOR_FPS); tft.print("FPS");
+    tft.drawRect(x2, y5, w_val, h_row, COLOR_FPS);
+    tft.drawRect(x2 + w_val - 30, y5 + h_row - unit_h, 30, unit_h, COLOR_FPS);
+    tft.setTextSize(1); tft.setCursor(x2 + w_val - 30 + 3, y5 + h_row - unit_h + 4); tft.print("FPS");
+    tft.drawRect(x3, y5, w_val, h_row, COLOR_FPS);
+    tft.drawRect(x3 + w_val - unit_w, y5 + h_row - unit_h, unit_w, unit_h, COLOR_FPS);
+    tft.setCursor(x3 + w_val - unit_w + 5, y5 + h_row - unit_h + 4); tft.print("ms");
+}
+
+void setup() {
+    Serial.begin(115200);
+    tft.begin();
+    tft.setRotation(0);
+    drawLayout();
+}
+
+void loop() {
+    if (Serial.available() > 0) {
+        String json_str = Serial.readStringUntil('\n');
+        DeserializationError error = deserializeJson(doc, json_str);
+        if (error) return;
+
+        // JSON'dan TÜM değerleri al
+        snprintf(current.GPUT, sizeof(current.GPUT), "%d", doc["GPUT"] | 0);
+        snprintf(current.GPUU, sizeof(current.GPUU), "%d", doc["GPUU"] | 0);
+        snprintf(current.GPUC, sizeof(current.GPUC), "%d", doc["GPUC"] | 0); // Eklendi
+        snprintf(current.GPUP, sizeof(current.GPUP), "%.1f", doc["GPUP"] | 0.0);
+        snprintf(current.FAN, sizeof(current.FAN), "%d", doc["FAN"] | 0);   // Eklendi
+        snprintf(current.FANS, sizeof(current.FANS), "%d", doc["FANS"] | 0);
+        snprintf(current.CPUT, sizeof(current.CPUT), "%d", doc["CPUT"] | 0);
+        snprintf(current.CPUU, sizeof(current.CPUU), "%d", doc["CPUU"] | 0);
+        snprintf(current.CPUP, sizeof(current.CPUP), "%.1f", doc["CPUP"] | 0.0); // Eklendi
+        snprintf(current.RAM, sizeof(current.RAM), "%d", doc["RAM"] | 0);
+        snprintf(current.FPS, sizeof(current.FPS), "%d", doc["FPS"] | 0);
+        snprintf(current.FT, sizeof(current.FT), "%.1f", doc["FT"] | 0.0);
+        
+        // Değişen değerleri ekrandaki TÜM kutuların içine bas
+        int x2 = 65, x3 = 125, x4 = 185;
+        int w_val = 50;
+        int w_ram = 130;
+        int h_row = 45;
+        int y1 = 15, y2 = 75, y3 = 135, y4 = 195, y5 = 255;
+
+        // GPU
+        updateField(x2, y1, w_val, h_row, current.GPUT, previous.GPUT, COLOR_GPU);
+        updateField(x3, y1, w_val, h_row, current.GPUU, previous.GPUU, COLOR_GPU);
+        updateField(x4, y1, w_val, h_row, current.GPUC, previous.GPUC, COLOR_GPU); // Eklendi
+        updateField(x2, y2, w_val, h_row, current.GPUP, previous.GPUP, COLOR_GPU);
+        updateField(x3, y2, w_val, h_row, current.FAN, previous.FAN, COLOR_GPU);   // Eklendi
+        updateField(x4, y2, w_val, h_row, current.FANS, previous.FANS, COLOR_GPU);
+        // CPU
+        updateField(x2, y3, w_val, h_row, current.CPUT, previous.CPUT, COLOR_CPU);
+        updateField(x3, y3, w_val, h_row, current.CPUU, previous.CPUU, COLOR_CPU);
+        updateField(x4, y3, w_val, h_row, current.CPUP, previous.CPUP, COLOR_CPU); // Eklendi
+        // RAM (Değişiklik yok)
+        updateField(x2, y4, w_ram, h_row, current.RAM, previous.RAM, COLOR_RAM);
+        // FPS (Değişiklik yok)
+        updateField(x2, y5, w_val, h_row, current.FPS, previous.FPS, COLOR_FPS);
+        updateField(x3, y5, w_val, h_row, current.FT, previous.FT, COLOR_FPS);
+        
+        memcpy(&previous, &current, sizeof(current));
+    }
+}
